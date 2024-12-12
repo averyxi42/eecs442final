@@ -6,6 +6,7 @@
 ###############################################
 
 import pyrealsense2 as rs
+from scipy.spatial.transform import Rotation as Rot
 import numpy as np
 np.set_printoptions(precision=3)
 np.set_printoptions(suppress=True)
@@ -14,6 +15,7 @@ import cv2 as cv
 from scipy.spatial.transform import Rotation
 from time import time
 from filterpy.kalman import UnscentedKalmanFilter,MerweScaledSigmaPoints
+import pandas as pd
 
 print(cv.__version__)
 
@@ -82,7 +84,7 @@ sift = cv.SIFT_create()
 orb = cv.ORB_create()
 fast = cv.FastFeatureDetector_create()
 agast = cv.AgastFeatureDetector_create()
-freak = cv.xfeatures2d.FREAK_create()
+# freak = cv.xfeatures2d.FREAK_create()
 detector = orb
 
 
@@ -226,7 +228,8 @@ kf_position.R = np.diag(np.ones(3)*4)
 kf_position.Q = np.diag(np.ones(3)*8)
 
 # lastRot = np.eye(3)
-positions = []
+poses = []
+timestamps = []
 try:
     while True:
         f = pipeline.wait_for_frames()
@@ -285,11 +288,16 @@ try:
         img = cv.cvtColor(frame.left,cv.COLOR_GRAY2RGB)
         img = draw_axis(img,R.T,R.T@ (np.array([[0,0,50]]).T-kf_position.x.reshape((3,1))),intrinsics)
 
+        rotvec = Rotation.from_matrix(R).as_rotvec()
+        pose = np.concatenate((kf_position.x,rotvec))
+        poses.append(pose)
+        timestamps.append(curr_t)
 
         # print(t[2,0])
         #print(dR)
         # if(accuracy>0.5 and dR>0.01):
         #     anchor = frame
+    
         #     anchor_pose = mat
         #     print("switching anchor!")
         #img = draw_axis(frame.left,R.T,np.array([[0,0.0,100]]),intrinsics)
@@ -297,7 +305,19 @@ try:
             anchor = frame
             anchor_pose[:3,:3] = Rot
             anchor_pose[:3,3] = kf_position.x  #gt.squeeze() #
-            print("updating anchor")
+            print("The current updating anchor is:")
+
+            # # Extract the 3x3 rotation matrix
+            # rotation_matrix = anchor_pose[:3, :3]
+
+            # # Create a rotation object from the matrix
+            # rotation_object = Rot.from_matrix(rotation_matrix)
+
+            # # Get Euler angles in 'xyz' order, radians
+            # # euler_angles = rotation_object.as_euler('xyz', degrees=False)
+
+            # print("Euler angles (radians):", euler_angles)
+
         # R = Rotation.from_matrix().as_rotvec()
 
         # depth = np.average(frame.pc[2])
@@ -350,8 +370,11 @@ try:
 finally:
 
     # Stop streaming
+
     pipeline.stop()
     imu_pipeline.stop()
+    np.savetxt('poses_1',np.array(poses),delimiter=',')
+    np.savetxt('timestamps_1',np.array(timestamps),delimiter = ',')
 
 # find the keypoints and descriptors with SIFT
 
